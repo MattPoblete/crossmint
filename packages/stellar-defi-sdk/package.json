@@ -1,0 +1,72 @@
+{
+  "name": "@stellar-defi/sdk",
+  "version": "0.1.0",
+  "description": "SDK for Stellar DeFi operations with Crossmint, Soroswap, and Defindex",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./wallet": {
+      "types": "./dist/wallet/index.d.ts",
+      "import": "./dist/wallet/index.mjs",
+      "require": "./dist/wallet/index.js"
+    },
+    "./dex": {
+      "types": "./dist/dex/index.d.ts",
+      "import": "./dist/dex/index.mjs",
+      "require": "./dist/dex/index.js"
+    },
+    "./yield": {
+      "types": "./dist/yield/index.d.ts",
+      "import": "./dist/yield/index.mjs",
+      "require": "./dist/yield/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crossmint/wallets-sdk": "^0.18.4",
+    "@stellar/stellar-sdk": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "msw": "^2.6.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "defi",
+    "crossmint",
+    "soroswap",
+    "defindex",
+    "wallet",
+    "sdk"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
