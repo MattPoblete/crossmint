@@ -127,6 +127,9 @@ importers:
       '@crossmint/wallets-sdk':
         specifier: ^0.18.4
         version: 0.18.4(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.22.4)
+      '@soroswap/sdk':
+        specifier: ^0.3.8
+        version: 0.3.8
       '@stellar/stellar-sdk':
         specifier: ^13.1.0
         version: 13.3.0
@@ -2461,6 +2464,10 @@ packages:
 
   '@solana/web3.js@1.98.4':
     resolution: {integrity: sha512-vv9lfnvjUsRiq//+j5pBdXig0IQdtzA0BRZ3bXEP4KaIyF1CcaydWqgyzQgfZMNIsWNWmG+AUHwPy4AHOD6gpw==}
+
+  '@soroswap/sdk@0.3.8':
+    resolution: {integrity: sha512-tkb4PouwxvenZItqosyU+cYLPGc5UQW31u1+X0j07BKjLxVMga6ONExX3VT6gvsvlqUnSEUgsX2VL2QSosIJNQ==}
+    engines: {node: '>=22.0.0'}
 
   '@spruceid/siwe-parser@2.1.2':
     resolution: {integrity: sha512-d/r3S1LwJyMaRAKQ0awmo9whfXeE88Qt00vRj91q5uv5ATtWIQEGJ67Yr5eSZw5zp1/fZCXZYuEckt8lSkereQ==}
@@ -10879,6 +10886,12 @@ snapshots:
       - encoding
       - typescript
       - utf-8-validate
+
+  '@soroswap/sdk@0.3.8':
+    dependencies:
+      axios: 1.13.2
+    transitivePeerDependencies:
+      - debug
 
   '@spruceid/siwe-parser@2.1.2':
     dependencies:

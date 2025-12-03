@@ -11,6 +11,7 @@ export type TradeType = 'EXACT_IN' | 'EXACT_OUT';
 export interface DexConfig {
   network: Network;
   rpcUrl?: string;
+  apiKey: string;
 }
 
 /**

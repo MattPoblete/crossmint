@@ -24,6 +24,11 @@ export interface StellarDefiConfig {
   };
 
   /**
+   * Soroswap API key for DEX operations
+   */
+  soroswapApiKey: string;
+
+  /**
    * Optional Soroswap configuration
    */
   soroswap?: {
@@ -148,6 +153,7 @@ export class StellarDefiClient {
     this.dex = new SoroswapDex({
       network: config.network,
       rpcUrl: config.soroswap?.rpcUrl ?? config.rpcUrl,
+      apiKey: config.soroswapApiKey,
     });
 
     // Initialize yield module

@@ -1,3 +1,10 @@
+import {
+  SoroswapSDK,
+  TradeType as SoroswapTradeType,
+  SupportedNetworks,
+  SupportedProtocols,
+} from '@soroswap/sdk';
+
 import { DexError, ErrorCodes } from '../errors';
 import { getContracts } from '../config/contracts';
 import { getNetworkConfig, type Network } from '../config/networks';
@@ -11,7 +18,6 @@ import type {
   QuoteParams,
   RemoveLiquidityParams,
   SwapParams,
-  TokenInfo,
 } from './types';
 
 /**
@@ -22,6 +28,7 @@ export class SoroswapDex implements IDex {
   private readonly rpcUrl: string;
   private readonly routerAddress: string;
   private readonly factoryAddress: string;
+  private readonly soroswapSdk: SoroswapSDK;
 
   constructor(config: DexConfig) {
     this.network = config.network;
@@ -32,6 +39,13 @@ export class SoroswapDex implements IDex {
     const contracts = getContracts(config.network);
     this.routerAddress = contracts.soroswap.router;
     this.factoryAddress = contracts.soroswap.factory;
+
+    this.soroswapSdk = new SoroswapSDK({
+      apiKey: config.apiKey,
+      defaultNetwork:
+        config.network === 'mainnet' ? SupportedNetworks.MAINNET : SupportedNetworks.TESTNET,
+    });
+    console.log('SoroswapDex initialized with network:', this.network);
   }
 
   /**
@@ -49,41 +63,45 @@ export class SoroswapDex implements IDex {
   }
 
   /**
-   * Get a swap quote
+   * Get a swap quote using Soroswap SDK
    */
   async getQuote(params: QuoteParams): Promise<Quote> {
+    if (!this.isValidAddress(params.tokenIn) || !this.isValidAddress(params.tokenOut)) {
+      throw new DexError('Invalid token address', ErrorCodes.INVALID_TOKEN);
+    }
+
     try {
-      // Validate tokens
-      if (!this.isValidAddress(params.tokenIn) || !this.isValidAddress(params.tokenOut)) {
-        throw new DexError('Invalid token address', ErrorCodes.INVALID_TOKEN);
-      }
+      const quoteResponse = await this.soroswapSdk.quote({
+        assetIn: params.tokenIn,
+        assetOut: params.tokenOut,
+        amount: params.amount,
+        tradeType:
+          params.tradeType === 'EXACT_IN' ? SoroswapTradeType.EXACT_IN : SoroswapTradeType.EXACT_OUT,
+        protocols: [SupportedProtocols.SOROSWAP, SupportedProtocols.AQUA, SupportedProtocols.PHOENIX],
+      });
 
-      // In a real implementation, this would:
-      // 1. Find the best route through available pools
-      // 2. Calculate amounts based on reserves
-      // 3. Calculate price impact
-
-      // Simplified quote calculation for now
-      // This would be replaced with actual Soroswap SDK calls
-      const amountIn = params.tradeType === 'EXACT_IN' ? params.amount : this.estimateAmountIn(params.amount);
-      const amountOut = params.tradeType === 'EXACT_OUT' ? params.amount : this.estimateAmountOut(params.amount);
+      const amountIn =
+        params.tradeType === 'EXACT_IN' ? params.amount : BigInt(quoteResponse.amountIn);
+      const amountOut =
+        params.tradeType === 'EXACT_OUT' ? params.amount : BigInt(quoteResponse.amountOut);
 
       return {
         tokenIn: params.tokenIn,
         tokenOut: params.tokenOut,
         amountIn,
         amountOut,
-        priceImpact: this.calculatePriceImpact(amountIn),
-        route: [params.tokenIn, params.tokenOut],
-        minimumReceived: params.tradeType === 'EXACT_IN' ? this.applySlippage(amountOut, 100) : undefined,
-        maximumSent: params.tradeType === 'EXACT_OUT' ? this.applySlippageMax(amountIn, 100) : undefined,
+        priceImpact: parseFloat(quoteResponse.priceImpactPct) || 0,
+        route: this.extractRoute(quoteResponse.routePlan, params.tokenIn, params.tokenOut),
+        minimumReceived:
+          params.tradeType === 'EXACT_IN' ? this.applySlippage(amountOut, 100) : undefined,
+        maximumSent:
+          params.tradeType === 'EXACT_OUT' ? this.applySlippageMax(amountIn, 100) : undefined,
       };
     } catch (error) {
-      if (error instanceof DexError) {
-        throw error;
-      }
+      if (error instanceof DexError) throw error;
+
       throw new DexError(
-        'Failed to get quote',
+        `Failed to get quote: ${error instanceof Error ? error.message : 'Unknown error'}`,
         ErrorCodes.INSUFFICIENT_LIQUIDITY,
         error instanceof Error ? error : undefined
       );
@@ -265,22 +283,24 @@ export class SoroswapDex implements IDex {
     return address.length === 56 && address.startsWith('C');
   }
 
-  private estimateAmountOut(amountIn: bigint): bigint {
-    // Simplified estimation - in reality would use reserves
-    // Assume 0.3% fee and some slippage
-    return (amountIn * 997n) / 1000n;
-  }
+  private extractRoute(
+    routePlan: Array<{ swapInfo: { path: string[] }; percent: string }> | undefined,
+    tokenIn: string,
+    tokenOut: string
+  ): string[] {
+    if (!routePlan || routePlan.length === 0) {
+      return [tokenIn, tokenOut];
+    }
 
-  private estimateAmountIn(amountOut: bigint): bigint {
-    // Simplified estimation
-    return (amountOut * 1000n) / 997n + 1n;
-  }
-
-  private calculatePriceImpact(amount: bigint): number {
-    // Simplified price impact calculation
-    // In reality, this would be based on pool reserves
-    const impact = Number(amount) / 1e12; // Very simplified
-    return Math.min(impact * 100, 100); // Cap at 100%
+    const route: string[] = [];
+    for (const step of routePlan) {
+      for (const asset of step.swapInfo.path) {
+        if (!route.includes(asset)) {
+          route.push(asset);
+        }
+      }
+    }
+    return route.length > 0 ? route : [tokenIn, tokenOut];
   }
 
   private applySlippage(amount: bigint, slippageBps: number): bigint {
