@@ -2,17 +2,24 @@
 
 import { useState } from 'react';
 import type { Quote } from '@stellar-defi/sdk';
+import { StellarWallet } from '@crossmint/client-sdk-react-ui';
 
 import { useWallet } from '@/providers/WalletProvider';
 import { getClient } from '@/lib/sdk';
 
+// Note: getClient is still used for getQuote
+
+// Mainnet token addresses
 const TOKENS = [
   { symbol: 'XLM', address: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA' },
   { symbol: 'USDC', address: 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75' },
 ];
 
+// Soroswap router contract (mainnet)
+const ROUTER_CONTRACT = 'CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH';
+
 export function SwapWidget() {
-  const { address } = useWallet();
+  const { address, wallet } = useWallet();
   const [tokenInIndex, setTokenInIndex] = useState(0);
   const [tokenOutIndex, setTokenOutIndex] = useState(1);
   const [amountIn, setAmountIn] = useState('');
@@ -49,27 +56,38 @@ export function SwapWidget() {
   };
 
   const handleSwap = async () => {
-    if (!quote || !address) return;
+    if (!quote || !address || !wallet) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const client = getClient();
-      const txXdr = await client.dex.buildSwapTransaction({
-        tokenIn: tokenIn.address,
-        tokenOut: tokenOut.address,
-        amount: quote.amountIn,
-        tradeType: 'EXACT_IN',
-        slippageBps: 100, // 1%
-        sourceAddress: address,
+      const stellarWallet = StellarWallet.from(wallet);
+
+      // Example: Swap using exact format from crossmint-stellar-example
+      // Args use raw JS values - SDK converts them to ScVal internally
+      const tx = await stellarWallet.sendTransaction({
+        contractId: ROUTER_CONTRACT,
+        method: "swap_exact_tokens_for_tokens",
+        args: {
+          amount_in: "1000000",        // string for i128
+          amount_out_min: "0",                          // string for i128
+          path: [                                       // array of strings for Vec<Address>
+            TOKENS[0].address,  // XLM
+            TOKENS[1].address   // USDC
+          ],
+          to: address,                                  // string for Address
+          deadline: Math.floor(Date.now() / 1000) + 3600
+        },
       });
 
-      // In a real implementation, we would sign and submit the transaction
-      console.log('Swap transaction built:', txXdr);
-      alert('Swap transaction built! Check console for XDR.');
+      console.log("Transaction:", tx);
+      alert(`Swap successful! TX: ${tx.hash || JSON.stringify(tx)}`);
+      setQuote(null);
+      setAmountIn('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to build swap transaction');
+      console.error('Swap failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to execute swap');
     } finally {
       setIsLoading(false);
     }
@@ -186,7 +204,7 @@ export function SwapWidget() {
             disabled={isLoading}
             className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg font-medium transition-colors"
           >
-            {isLoading ? 'Building Transaction...' : 'Swap'}
+              {isLoading ? 'Executing Swap...' : 'Swap'}
           </button>
         )}
       </div>

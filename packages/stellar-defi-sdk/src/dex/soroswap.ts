@@ -4,10 +4,19 @@ import {
   SupportedNetworks,
   SupportedProtocols,
 } from '@soroswap/sdk';
+import {
+  Contract,
+  rpc,
+  TransactionBuilder,
+  xdr,
+  Address,
+  nativeToScVal,
+  Account,
+} from '@stellar/stellar-sdk';
 
 import { DexError, ErrorCodes } from '../errors';
 import { getContracts } from '../config/contracts';
-import { getNetworkConfig, type Network } from '../config/networks';
+import { getNetworkConfig, NETWORK_PASSPHRASES, type Network } from '../config/networks';
 
 import type {
   AddLiquidityParams,
@@ -118,7 +127,15 @@ export class SoroswapDex implements IDex {
         throw new DexError('Invalid token address', ErrorCodes.INVALID_TOKEN);
       }
 
-      // Get quote first
+      // Only EXACT_IN is supported for now
+      if (params.tradeType !== 'EXACT_IN') {
+        throw new DexError(
+          'Only EXACT_IN trade type is currently supported',
+          ErrorCodes.SWAP_FAILED
+        );
+      }
+
+      // Get quote to determine the route and expected output
       const quote = await this.getQuote({
         tokenIn: params.tokenIn,
         tokenOut: params.tokenOut,
@@ -126,37 +143,68 @@ export class SoroswapDex implements IDex {
         tradeType: params.tradeType,
       });
 
-      // Calculate minimum/maximum amounts with slippage
+      // Calculate minimum amount out with slippage tolerance
       const slippageBps = params.slippageBps ?? 100; // Default 1%
-      const minAmountOut = params.tradeType === 'EXACT_IN'
-        ? this.applySlippage(quote.amountOut, slippageBps)
-        : quote.amountOut;
-      const maxAmountIn = params.tradeType === 'EXACT_OUT'
-        ? this.applySlippageMax(quote.amountIn, slippageBps)
-        : quote.amountIn;
+      const minAmountOut = this.applySlippage(quote.amountOut, slippageBps);
 
-      // In a real implementation, this would build the actual transaction
-      // using @soroswap/sdk or direct contract calls
-      // For now, return a placeholder XDR
-      const txData = {
-        type: params.tradeType === 'EXACT_IN' ? 'swap_exact_tokens_for_tokens' : 'swap_tokens_for_exact_tokens',
-        tokenIn: params.tokenIn,
-        tokenOut: params.tokenOut,
-        amountIn: params.tradeType === 'EXACT_IN' ? params.amount.toString() : maxAmountIn.toString(),
-        amountOut: params.tradeType === 'EXACT_OUT' ? params.amount.toString() : minAmountOut.toString(),
-        path: quote.route,
-        to: params.sourceAddress,
-        deadline: params.deadline ?? Math.floor(Date.now() / 1000) + 1800, // 30 min default
-      };
+      // Calculate deadline (default 30 minutes from now)
+      const deadline = params.deadline ?? Math.floor(Date.now() / 1000) + 1800;
 
-      // Return base64 encoded transaction data as placeholder
-      return Buffer.from(JSON.stringify(txData)).toString('base64');
+      // Build the Soroban contract invocation
+      const server = new rpc.Server(this.rpcUrl);
+      const contract = new Contract(this.routerAddress);
+
+      // Build contract call operation
+      // swap_exact_tokens_for_tokens(amount_in, amount_out_min, path, to, deadline)
+      const operation = contract.call(
+        'swap_exact_tokens_for_tokens',
+        this.bigintToI128(params.amount), // amount_in: i128
+        this.bigintToI128(minAmountOut), // amount_out_min: i128
+        this.buildPathVector(quote.route), // path: Vec<Address>
+        new Address(params.sourceAddress).toScVal(), // to: Address
+        this.timestampToU64(deadline) // deadline: u64
+      );
+
+      // Get the source account for transaction building
+      const sourceAccount = await this.getSourceAccount(server, 'GALAXYVOIDAOPZTDLHILAJQKCVVFMD4IKLXLSZV5YHO7VY74IWZILUTO');
+
+      // Get network passphrase
+      const networkPassphrase = NETWORK_PASSPHRASES[this.network];
+
+      // Build the transaction
+      const transaction = new TransactionBuilder(sourceAccount, {
+        fee: '100', // Base fee - will be adjusted by simulation
+        networkPassphrase,
+      })
+        .addOperation(operation)
+        .setTimeout(30)
+        .build();
+
+      // Simulate the transaction to get resource estimates and footprint
+      const simulation = await server.simulateTransaction(transaction);
+
+      // Check for simulation errors
+      if (rpc.Api.isSimulationError(simulation)) {
+        throw new DexError(
+          `Transaction simulation failed: ${simulation.error}`,
+          ErrorCodes.SWAP_FAILED
+        );
+      }
+
+      // Assemble the transaction with simulation results
+      const preparedTransaction = rpc.assembleTransaction(transaction, simulation).build();
+
+      // Return the XDR of the unsigned transaction as base64 string
+      // Use String() to ensure primitive string (not String object)
+      const xdrString = String(preparedTransaction.toXDR());
+
+      return xdrString;
     } catch (error) {
       if (error instanceof DexError) {
         throw error;
       }
       throw new DexError(
-        'Failed to build swap transaction',
+        `Failed to build swap transaction: ${error instanceof Error ? error.message : 'Unknown error'}`,
         ErrorCodes.SWAP_FAILED,
         error instanceof Error ? error : undefined
       );
@@ -311,5 +359,40 @@ export class SoroswapDex implements IDex {
   private applySlippageMax(amount: bigint, slippageBps: number): bigint {
     // Apply slippage tolerance (maximum sent)
     return (amount * BigInt(10000 + slippageBps)) / 10000n;
+  }
+
+  /**
+   * Convert a bigint to an i128 ScVal for Soroban contract calls
+   */
+  private bigintToI128(value: bigint): xdr.ScVal {
+    return nativeToScVal(value, { type: 'i128' });
+  }
+
+  /**
+   * Convert an array of token addresses to a Vec<Address> ScVal
+   */
+  private buildPathVector(path: string[]): xdr.ScVal {
+    const addresses = path.map((addr) => new Address(addr).toScVal());
+    return xdr.ScVal.scvVec(addresses);
+  }
+
+  /**
+   * Convert a Unix timestamp to a u64 ScVal
+   */
+  private timestampToU64(timestamp: number): xdr.ScVal {
+    return nativeToScVal(timestamp, { type: 'u64' });
+  }
+
+  /**
+   * Get or create a source account for transaction building
+   */
+  private async getSourceAccount(server: rpc.Server, address: string): Promise<Account> {
+    try {
+      const account = await server.getAccount(address);
+      return account;
+    } catch {
+      // If account doesn't exist (e.g., new smart wallet), create placeholder
+      return new Account(address, '0');
+    }
   }
 }

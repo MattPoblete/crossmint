@@ -11,6 +11,7 @@ interface WalletContextType {
   wallet: Wallet<Chain> | null;
   stellarWallet: StellarWallet | null;
   address: string | null;
+  email: string | null;
   error: string | null;
   login: () => void;
   logout: () => void;
@@ -20,7 +21,7 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { wallet, status } = useCrossmintWallet();
-  const { login, logout } = useAuth();
+  const { login, logout, user } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   const stellarWallet = useMemo(() => {
@@ -43,11 +44,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       wallet: wallet ?? null,
       stellarWallet,
       address: wallet?.address ?? null,
+      email: user?.email ?? null,
       error,
       login,
       logout,
     }),
-    [wallet, stellarWallet, status, error, login, logout]
+    [wallet, stellarWallet, status, error, login, logout, user]
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

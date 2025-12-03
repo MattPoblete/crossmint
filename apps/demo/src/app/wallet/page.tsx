@@ -3,10 +3,11 @@
 import Link from 'next/link';
 
 import { WalletConnect } from '@/components/WalletConnect';
+import { BalanceDisplay } from '@/components/BalanceDisplay';
 import { useWallet } from '@/providers/WalletProvider';
 
 export default function WalletPage() {
-  const { isConnected, wallet, address } = useWallet();
+  const { isConnected, wallet, address, email } = useWallet();
 
   return (
     <main className="min-h-screen p-8">
@@ -37,6 +38,12 @@ export default function WalletPage() {
                 <WalletConnect />
               </div>
               <div className="space-y-3">
+                {email && (
+                  <div>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">Email</label>
+                    <p className="text-sm">{email}</p>
+                  </div>
+                )}
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400">Address</label>
                   <p className="font-mono text-sm break-all">{address}</p>
@@ -48,6 +55,10 @@ export default function WalletPage() {
                   </div>
                 )}
               </div>
+            </section>
+
+            <section className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+              <BalanceDisplay />
             </section>
 
             <section className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
