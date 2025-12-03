@@ -2,6 +2,7 @@ import { StellarDefiClient } from '@stellar-defi/sdk';
 
 // Environment variables
 const CROSSMINT_API_KEY = process.env.NEXT_PUBLIC_CROSSMINT_API_KEY ?? '';
+const SOROSWAP_API_KEY = process.env.NEXT_PUBLIC_SOROSWAP_API_KEY ?? '';
 const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? 'testnet') as 'testnet' | 'mainnet';
 
 let clientInstance: StellarDefiClient | null = null;
@@ -25,6 +26,9 @@ export function getClient(): StellarDefiClient {
     if (!CROSSMINT_API_KEY) {
       throw new Error('NEXT_PUBLIC_CROSSMINT_API_KEY is required');
     }
+    if (!SOROSWAP_API_KEY) {
+      throw new Error('NEXT_PUBLIC_SOROSWAP_API_KEY is required');
+    }
 
     const baseUrl = getCrossmintBaseUrl();
 
@@ -34,6 +38,7 @@ export function getClient(): StellarDefiClient {
         apiKey: CROSSMINT_API_KEY,
         baseUrl,
       },
+      soroswapApiKey: SOROSWAP_API_KEY,
     });
   }
 

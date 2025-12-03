@@ -7,8 +7,8 @@ import { useWallet } from '@/providers/WalletProvider';
 import { getClient } from '@/lib/sdk';
 
 const TOKENS = [
-  { symbol: 'XLM', address: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC' },
-  { symbol: 'USDC', address: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA' },
+  { symbol: 'XLM', address: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA' },
+  { symbol: 'USDC', address: 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75' },
 ];
 
 export function SwapWidget() {
